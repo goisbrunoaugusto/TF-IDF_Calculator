@@ -61,36 +61,84 @@ public class TfIdfConcurrent {
 
     public static void main(String[] args) {
         String filePath = "./dataset2.txt"; 
-        List<List<String>> documents = new ArrayList<>();
         List<String> currentDocumentWords = new ArrayList<>();
+        List<Future<List<String>>> pendingTokenizedDocuments = new ArrayList<>();
+        ExecutorService documentTokenizationExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
         System.out.println("Iniciando leitura e tokenização dos documentos...");
         try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
             String line;
             while ((line = br.readLine()) != null) {
-                if (line.trim().isEmpty()) {
+                if (line.trim().isEmpty()) { // Delimitador de documento
                     if (!currentDocumentWords.isEmpty()) {
-                        documents.add(new ArrayList<>(currentDocumentWords));
+                        // Copia as linhas para a tarefa e limpa para o próximo documento
+                        final List<String> linesToTokenize = new ArrayList<>(currentDocumentWords);
+                        Callable<List<String>> tokenizationTask = () -> {
+                            List<String> tokenizedDoc = new ArrayList<>();
+                            for (String l : linesToTokenize) {
+                                tokenizedDoc.addAll(tokenize(l)); // tokenize() processa uma linha
+                            }
+                            return tokenizedDoc;
+                        };
+                        pendingTokenizedDocuments.add(documentTokenizationExecutor.submit(tokenizationTask));
                         currentDocumentWords.clear();
                     }
                 } else {
-                    currentDocumentWords.addAll(tokenize(line));
+                    currentDocumentWords.add(line);
                 }
             }
             if (!currentDocumentWords.isEmpty()) {
-                documents.add(currentDocumentWords);
+                final List<String> linesToTokenize = new ArrayList<>(currentDocumentWords);
+                Callable<List<String>> tokenizationTask = () -> {
+                    List<String> tokenizedDoc = new ArrayList<>();
+                    for (String l : linesToTokenize) {
+                        tokenizedDoc.addAll(tokenize(l));
+                    }
+                    return tokenizedDoc;
+                };
+                pendingTokenizedDocuments.add(documentTokenizationExecutor.submit(tokenizationTask));
             }
+
         } catch (IOException e) {
             System.err.println("Erro ao ler o arquivo: " + e.getMessage());
             e.printStackTrace();
             return;
         }
 
+        System.out.println("Todas as tarefas de tokenização de documentos foram submetidas" +
+                " (" + pendingTokenizedDocuments.size() + " tarefas). Coletando resultados...");
+
+        List<List<String>> documents = new ArrayList<>();
+        int docCount = 0;
+        for (Future<List<String>> futureDoc : pendingTokenizedDocuments) {
+            try {
+                documents.add(futureDoc.get());
+                docCount++;
+                if (docCount % 100 == 0) {
+                    System.out.println("Documentos tokenizados e coletados: " + docCount + "/" + pendingTokenizedDocuments.size());
+                }
+            } catch (InterruptedException | ExecutionException e) {
+                System.err.println("Erro ao tokenizar um documento: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+
+        documentTokenizationExecutor.shutdown();
+        try {
+            if (!documentTokenizationExecutor.awaitTermination(5, TimeUnit.MINUTES)) { // Ajuste o timeout conforme necessário
+                documentTokenizationExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            documentTokenizationExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+        System.out.println("Tokenização concorrente de documentos concluída. Número de documentos processados: " + documents.size());
+
         if (documents.isEmpty()) {
-            System.out.println("Nenhum documento encontrado no arquivo.");
+            System.out.println("Nenhum documento foi processado para TF-IDF.");
             return;
         }
-        System.out.println("Número de documentos lidos: " + documents.size());
+
         System.out.println("Pré-calculando frequências de documentos (DF)...");
 
         Map<String, Integer> documentFrequencyMap = new HashMap<>();
