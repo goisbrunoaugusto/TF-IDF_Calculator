@@ -113,7 +113,7 @@ public class TfIdfConcurrent {
         List<Map<String, Double>> tfIdfScoresPerDocument = new ArrayList<>(Collections.nCopies(documents.size(), null));
 
         int numThreads = Runtime.getRuntime().availableProcessors();
-        try (ExecutorService executor = Executors.newFixedThreadPool(numThreads)) {
+        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
             System.out.println("Usando " + numThreads + " threads para cálculo de TF-IDF.");
 
             List<Future<Map<String, Double>>> futures = new ArrayList<>();
@@ -158,7 +158,7 @@ public class TfIdfConcurrent {
 
             executor.shutdown(); 
             try {
-                if (!executor.awaitTermination(60, TimeUnit.SECONDS)) {
+                if (!executor.awaitTermination(600, TimeUnit.SECONDS)) {
                     executor.shutdownNow(); 
                 }
             } catch (InterruptedException e) {
