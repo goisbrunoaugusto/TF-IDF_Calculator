@@ -63,8 +63,7 @@ public class TfIdfConcurrent {
         return tokens;
     }
 
-    public static void main(String[] args) {
-        String filePath = "./dataset2.txt";
+    public static List<Map<String, Double>> runFullProcess(String filePath) {
         List<Future<List<String>>> pendingTokenizedDocuments = new ArrayList<>();
         List<List<String>> documents;
 
@@ -110,7 +109,7 @@ public class TfIdfConcurrent {
                 System.err.println("Erro ao ler o arquivo: " + e.getMessage());
                 e.printStackTrace();
                 documentTokenizationExecutor.shutdownNow();
-                return;
+                return Collections.emptyList();
             }
 
             System.out.println("Todas as tarefas de tokenização de documentos foram submetidas" +
@@ -145,7 +144,7 @@ public class TfIdfConcurrent {
 
         if (documents.isEmpty()) {
             System.out.println("Nenhum documento foi processado para TF-IDF.");
-            return;
+            return Collections.emptyList();
         }
 
         System.out.println("Pré-calculando frequências de documentos (DF)...");
@@ -170,8 +169,8 @@ public class TfIdfConcurrent {
         List<Map<String, Double>> tfIdfScoresPerDocument = new ArrayList<>(Collections.nCopies(documents.size(), null));
 
         int numThreads = Runtime.getRuntime().availableProcessors();
-        try (ExecutorService executor = Executors.newFixedThreadPool(numThreads)) { 
-            System.out.println("Usando " + numThreads + " threads de plataforma para cálculo de TF-IDF."); 
+        try (ExecutorService executor = Executors.newFixedThreadPool(numThreads)) {
+            System.out.println("Usando " + numThreads + " threads de plataforma para cálculo de TF-IDF.");
 
             List<Future<Map<String, Double>>> futures = new ArrayList<>();
 
@@ -212,7 +211,7 @@ public class TfIdfConcurrent {
                 }
             }
             System.out.println("Coleta de todos os resultados de TF-IDF concluída.");
-            
+
         }
 
         System.out.println("Cálculo de TF-IDF (paralelo) concluído.");
@@ -227,6 +226,27 @@ public class TfIdfConcurrent {
             System.out.println("Nenhum score TF-IDF foi calculado (lista vazia).");
         } else {
             System.out.println("Scores TF-IDF para o primeiro documento não puderam ser recuperados (possivelmente erro no cálculo).");
+        }
+        return tfIdfScoresPerDocument;
+    }
+
+    public static void main(String[] args) {
+        String filePath = "src/main/java/ufrn/imd/concorrente/dataset2.txt";
+        System.out.println("Executando processo completo (Virtual Threads para Tokenização, Platform para TF-IDF) via método main...");
+
+        long startTime = System.nanoTime();
+        List<Map<String, Double>> results = runFullProcess(filePath);
+        long endTime = System.nanoTime();
+
+        double durationMillis = (endTime - startTime) / 1_000_000.0;
+        System.out.printf("Processo completo concluído em %.2f ms. Número de documentos com scores TF-IDF: %d\n", durationMillis, results.size());
+
+        if (!results.isEmpty() && results.get(0) != null) {
+            System.out.println("\nExemplo de scores TF-IDF para o primeiro documento (via main):");
+            results.get(0).entrySet().stream()
+                    .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
+                    .limit(5)
+                    .forEach(entry -> System.out.printf("Termo: '%s', TF-IDF: %.4f\n", entry.getKey(), entry.getValue()));
         }
     }
 }
