@@ -69,14 +69,14 @@ public class TfIdfConcurrent {
         try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
             String line;
             while ((line = br.readLine()) != null) {
-                if (line.trim().isEmpty()) { // Delimitador de documento
+                if (line.trim().isEmpty()) {
                     if (!currentDocumentWords.isEmpty()) {
-                        // Copia as linhas para a tarefa e limpa para o próximo documento
+
                         final List<String> linesToTokenize = new ArrayList<>(currentDocumentWords);
                         Callable<List<String>> tokenizationTask = () -> {
                             List<String> tokenizedDoc = new ArrayList<>();
                             for (String l : linesToTokenize) {
-                                tokenizedDoc.addAll(tokenize(l)); // tokenize() processa uma linha
+                                tokenizedDoc.addAll(tokenize(l));
                             }
                             return tokenizedDoc;
                         };
@@ -125,7 +125,7 @@ public class TfIdfConcurrent {
 
         documentTokenizationExecutor.shutdown();
         try {
-            if (!documentTokenizationExecutor.awaitTermination(5, TimeUnit.MINUTES)) { // Ajuste o timeout conforme necessário
+            if (!documentTokenizationExecutor.awaitTermination(5, TimeUnit.MINUTES)) {
                 documentTokenizationExecutor.shutdownNow();
             }
         } catch (InterruptedException e) {
