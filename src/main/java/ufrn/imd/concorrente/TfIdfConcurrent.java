@@ -66,80 +66,80 @@ public class TfIdfConcurrent {
     public static void main(String[] args) {
         String filePath = "./dataset2.txt";
         List<Future<List<String>>> pendingTokenizedDocuments = new ArrayList<>();
-        int numDocTokenizationThreads = Runtime.getRuntime().availableProcessors();
-        ExecutorService documentTokenizationExecutor = Executors.newFixedThreadPool(numDocTokenizationThreads);
-        System.out.println("Usando " + numDocTokenizationThreads + " threads de plataforma para tokenização de documentos.");
+        List<List<String>> documents;
 
-        System.out.println("Iniciando leitura e tokenização dos documentos...");
-        try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
-            String line;
-            
-            List<String> linesForCurrentDoc = new ArrayList<>();
-            while ((line = br.readLine()) != null) {
-                if (line.trim().isEmpty()) {
-                    if (!linesForCurrentDoc.isEmpty()) {
-                        final List<String> linesToTokenize = new ArrayList<>(linesForCurrentDoc);
-                        Callable<List<String>> tokenizationTask = () -> {
-                            List<String> tokenizedDoc = new ArrayList<>();
-                            for (String l : linesToTokenize) {
-                                tokenizedDoc.addAll(tokenize(l));
-                            }
-                            return tokenizedDoc;
-                        };
-                        pendingTokenizedDocuments.add(documentTokenizationExecutor.submit(tokenizationTask));
-                        linesForCurrentDoc.clear();
+        try (ExecutorService documentTokenizationExecutor = Executors.newVirtualThreadPerTaskExecutor()) {
+            System.out.println("Iniciando leitura e tokenização dos documentos...");
+            try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
+                String line;
+
+                List<String> linesForCurrentDoc = new ArrayList<>();
+                while ((line = br.readLine()) != null) {
+                    if (line.trim().isEmpty()) {
+                        if (!linesForCurrentDoc.isEmpty()) {
+                            final List<String> linesToTokenize = new ArrayList<>(linesForCurrentDoc);
+                            Callable<List<String>> tokenizationTask = () -> {
+                                List<String> tokenizedDoc = new ArrayList<>();
+                                for (String l : linesToTokenize) {
+                                    tokenizedDoc.addAll(tokenize(l));
+                                }
+                                return tokenizedDoc;
+                            };
+                            pendingTokenizedDocuments.add(documentTokenizationExecutor.submit(tokenizationTask));
+                            linesForCurrentDoc.clear();
+                        }
+                    } else {
+
+                        linesForCurrentDoc.add(line);
                     }
-                } else {
-                    
-                    linesForCurrentDoc.add(line);
                 }
-            }
-            
-            if (!linesForCurrentDoc.isEmpty()) {
-                final List<String> linesToTokenize = new ArrayList<>(linesForCurrentDoc);
-                Callable<List<String>> tokenizationTask = () -> {
-                    List<String> tokenizedDoc = new ArrayList<>();
-                    for (String l : linesToTokenize) {
-                        tokenizedDoc.addAll(tokenize(l));
-                    }
-                    return tokenizedDoc;
-                };
-                pendingTokenizedDocuments.add(documentTokenizationExecutor.submit(tokenizationTask));
-            }
 
-        } catch (IOException e) {
-            System.err.println("Erro ao ler o arquivo: " + e.getMessage());
-            e.printStackTrace();
-            documentTokenizationExecutor.shutdownNow(); 
-            return;
-        }
-
-        System.out.println("Todas as tarefas de tokenização de documentos foram submetidas" +
-                " (" + pendingTokenizedDocuments.size() + " tarefas). Coletando resultados...");
-
-        List<List<String>> documents = new ArrayList<>();
-        int docCount = 0;
-        for (Future<List<String>> futureDoc : pendingTokenizedDocuments) {
-            try {
-                documents.add(futureDoc.get());
-                docCount++;
-                if (docCount % 100 == 0) {
-                    System.out.println("Documentos tokenizados e coletados: " + docCount + "/" + pendingTokenizedDocuments.size());
+                if (!linesForCurrentDoc.isEmpty()) {
+                    final List<String> linesToTokenize = new ArrayList<>(linesForCurrentDoc);
+                    Callable<List<String>> tokenizationTask = () -> {
+                        List<String> tokenizedDoc = new ArrayList<>();
+                        for (String l : linesToTokenize) {
+                            tokenizedDoc.addAll(tokenize(l));
+                        }
+                        return tokenizedDoc;
+                    };
+                    pendingTokenizedDocuments.add(documentTokenizationExecutor.submit(tokenizationTask));
                 }
-            } catch (InterruptedException | ExecutionException e) {
-                System.err.println("Erro ao tokenizar um documento: " + e.getMessage());
+
+            } catch (IOException e) {
+                System.err.println("Erro ao ler o arquivo: " + e.getMessage());
                 e.printStackTrace();
-            }
-        }
-
-        documentTokenizationExecutor.shutdown();
-        try {
-            if (!documentTokenizationExecutor.awaitTermination(5, TimeUnit.MINUTES)) {
                 documentTokenizationExecutor.shutdownNow();
+                return;
             }
-        } catch (InterruptedException e) {
-            documentTokenizationExecutor.shutdownNow();
-            Thread.currentThread().interrupt();
+
+            System.out.println("Todas as tarefas de tokenização de documentos foram submetidas" +
+                    " (" + pendingTokenizedDocuments.size() + " tarefas). Coletando resultados...");
+
+            documents = new ArrayList<>();
+            int docCount = 0;
+            for (Future<List<String>> futureDoc : pendingTokenizedDocuments) {
+                try {
+                    documents.add(futureDoc.get());
+                    docCount++;
+                    if (docCount % 100 == 0) {
+                        System.out.println("Documentos tokenizados e coletados: " + docCount + "/" + pendingTokenizedDocuments.size());
+                    }
+                } catch (InterruptedException | ExecutionException e) {
+                    System.err.println("Erro ao tokenizar um documento: " + e.getMessage());
+                    e.printStackTrace();
+                }
+            }
+
+            documentTokenizationExecutor.shutdown();
+            try {
+                if (!documentTokenizationExecutor.awaitTermination(5, TimeUnit.MINUTES)) {
+                    documentTokenizationExecutor.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                documentTokenizationExecutor.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
         }
         System.out.println("Tokenização concorrente de documentos concluída. Número de documentos processados: " + documents.size());
 
