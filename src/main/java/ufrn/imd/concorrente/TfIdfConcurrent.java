@@ -27,7 +27,7 @@ public class TfIdfConcurrent {
                 termCount++;
             }
         }
-        
+
         if (document.isEmpty()) {
             return 0.0;
         }
@@ -64,43 +64,50 @@ public class TfIdfConcurrent {
     }
 
     public static List<Map<String, Double>> runFullProcess(String filePath) {
-        List<Future<List<String>>> pendingTokenizedDocuments = new ArrayList<>();
-        List<List<String>> documents;
+        final List<List<String>> documents = new ArrayList<>();
+        List<Future<Void>> pendingTokenizedDocuments = new ArrayList<>();
 
         try (ExecutorService documentTokenizationExecutor = Executors.newVirtualThreadPerTaskExecutor()) {
             System.out.println("Iniciando leitura e tokenização dos documentos...");
             try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
                 String line;
-
                 List<String> linesForCurrentDoc = new ArrayList<>();
+
                 while ((line = br.readLine()) != null) {
                     if (line.trim().isEmpty()) {
                         if (!linesForCurrentDoc.isEmpty()) {
                             final List<String> linesToTokenize = new ArrayList<>(linesForCurrentDoc);
-                            Callable<List<String>> tokenizationTask = () -> {
+                            
+                            Callable<Void> tokenizationTask = () -> {
                                 List<String> tokenizedDoc = new ArrayList<>();
                                 for (String l : linesToTokenize) {
                                     tokenizedDoc.addAll(tokenize(l));
                                 }
-                                return tokenizedDoc;
+                                
+                                synchronized (documents) {
+                                    documents.add(tokenizedDoc);
+                                }
+                                return null; 
                             };
                             pendingTokenizedDocuments.add(documentTokenizationExecutor.submit(tokenizationTask));
                             linesForCurrentDoc.clear();
                         }
                     } else {
-
                         linesForCurrentDoc.add(line);
                     }
                 }
 
                 if (!linesForCurrentDoc.isEmpty()) {
                     final List<String> linesToTokenize = new ArrayList<>(linesForCurrentDoc);
-                    Callable<List<String>> tokenizationTask = () -> {
+                    Callable<Void> tokenizationTask = () -> {
                         List<String> tokenizedDoc = new ArrayList<>();
                         for (String l : linesToTokenize) {
                             tokenizedDoc.addAll(tokenize(l));
                         }
-                        return tokenizedDoc;
+                        synchronized (documents) {
+                            documents.add(tokenizedDoc);
+                        }
+                        return null;
                     };
                     pendingTokenizedDocuments.add(documentTokenizationExecutor.submit(tokenizationTask));
                 }
@@ -108,27 +115,27 @@ public class TfIdfConcurrent {
             } catch (IOException e) {
                 System.err.println("Erro ao ler o arquivo: " + e.getMessage());
                 e.printStackTrace();
-                documentTokenizationExecutor.shutdownNow();
+                documentTokenizationExecutor.shutdownNow(); 
                 return Collections.emptyList();
             }
 
             System.out.println("Todas as tarefas de tokenização de documentos foram submetidas" +
-                    " (" + pendingTokenizedDocuments.size() + " tarefas). Coletando resultados...");
+                    " (" + pendingTokenizedDocuments.size() + " tarefas). Aguardando conclusão...");
 
-            documents = new ArrayList<>();
-            int docCount = 0;
-            for (Future<List<String>> futureDoc : pendingTokenizedDocuments) {
+            int tasksCompleted = 0;
+            for (Future<Void> futureDoc : pendingTokenizedDocuments) {
                 try {
-                    documents.add(futureDoc.get());
-                    docCount++;
-                    if (docCount % 100 == 0) {
-                        System.out.println("Documentos tokenizados e coletados: " + docCount + "/" + pendingTokenizedDocuments.size());
+                    futureDoc.get(); 
+                    tasksCompleted++;
+                    if (tasksCompleted % 100 == 0) {
+                        System.out.println("Tarefas de tokenização concluídas: " + tasksCompleted + "/" + pendingTokenizedDocuments.size());
                     }
                 } catch (InterruptedException | ExecutionException e) {
-                    System.err.println("Erro ao tokenizar um documento: " + e.getMessage());
+                    System.err.println("Erro em uma tarefa de tokenização: " + e.getMessage());
                     e.printStackTrace();
                 }
             }
+            System.out.println("Processamento de tokenização concluído. Documentos efetivamente na lista: " + documents.size());
 
             documentTokenizationExecutor.shutdown();
             try {
@@ -139,8 +146,9 @@ public class TfIdfConcurrent {
                 documentTokenizationExecutor.shutdownNow();
                 Thread.currentThread().interrupt();
             }
-        }
-        System.out.println("Tokenização concorrente de documentos concluída. Número de documentos processados: " + documents.size());
+        } 
+
+        System.out.println("Tokenização concorrente de documentos (com adição sincronizada) concluída. Número de documentos processados: " + documents.size());
 
         if (documents.isEmpty()) {
             System.out.println("Nenhum documento foi processado para TF-IDF.");
@@ -152,7 +160,7 @@ public class TfIdfConcurrent {
         Map<String, Integer> documentFrequencyMap = new HashMap<>();
         Set<String> allUniqueTerms = new HashSet<>();
 
-        for (List<String> doc : documents) {
+        for (List<String> doc : documents) { 
             Set<String> termsInCurrentDoc = new HashSet<>();
             for (String token : doc) {
                 allUniqueTerms.add(token);
@@ -176,11 +184,10 @@ public class TfIdfConcurrent {
 
             final Map<String, Integer> finalDocumentFrequencyMap = documentFrequencyMap;
             final int totalNumDocuments = documents.size();
-            final List<List<String>> finalDocuments = documents;
 
             for (int i = 0; i < totalNumDocuments; i++) {
                 final int docIndex = i;
-                final List<String> currentDocWords = finalDocuments.get(docIndex);
+                final List<String> currentDocWords = documents.get(docIndex);
 
                 Callable<Map<String, Double>> task = () -> {
                     Map<String, Double> tfIdfScores = new HashMap<>();
@@ -211,8 +218,7 @@ public class TfIdfConcurrent {
                 }
             }
             System.out.println("Coleta de todos os resultados de TF-IDF concluída.");
-
-        }
+        } 
 
         System.out.println("Cálculo de TF-IDF (paralelo) concluído.");
 
@@ -231,8 +237,7 @@ public class TfIdfConcurrent {
     }
 
     public static void main(String[] args) {
-        String filePath = "src/main/java/ufrn/imd/concorrente/dataset2.txt";
-        System.out.println("Executando processo completo (Virtual Threads para Tokenização, Platform para TF-IDF) via método main...");
+        String filePath = "src/main/java/ufrn/imd/concorrente/dataset2.txt"; 
 
         long startTime = System.nanoTime();
         List<Map<String, Double>> results = runFullProcess(filePath);
