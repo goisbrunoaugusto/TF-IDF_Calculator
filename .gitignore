@@ -13,6 +13,9 @@ enwiki*
 *.iws
 *.iml
 *.ipr
+Teste*
+*pom
+*.jfr
 
 ### Eclipse ###
 .apt_generated
