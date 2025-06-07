@@ -1,0 +1,27 @@
+{
+  "name": "scala",
+  "argv": [
+    "/home/bruno/.cache/coursier/arc/https/github.com/scala/scala3/releases/download/3.7.0/scala3-3.7.0-x86_64-pc-linux.tar.gz/scala3-3.7.0-x86_64-pc-linux/libexec/scala-cli",
+    "--cli-default-scala-version",
+    "3.7.0",
+    "--repository",
+    "file:///home/bruno/.cache/coursier/arc/https/github.com/scala/scala3/releases/download/3.7.0/scala3-3.7.0-x86_64-pc-linux.tar.gz/scala3-3.7.0-x86_64-pc-linux/maven2",
+    "--prog-name",
+    "scala",
+    "--skip-cli-updates",
+    "bsp",
+    "--json-options",
+    "/home/bruno/Documents/concorrente/TF-IDF/scala/.scala-build/ide-options-v2.json",
+    "--json-launcher-options",
+    "/home/bruno/Documents/concorrente/TF-IDF/scala/.scala-build/ide-launcher-options.json",
+    "--envs-file",
+    "/home/bruno/Documents/concorrente/TF-IDF/scala/.scala-build/ide-envs.json",
+    "/home/bruno/Documents/concorrente/TF-IDF/scala/TfIdfCalculator.scala"
+  ],
+  "version": "1.7.1",
+  "bspVersion": "2.1.1",
+  "languages": [
+    "scala",
+    "java"
+  ]
+}
